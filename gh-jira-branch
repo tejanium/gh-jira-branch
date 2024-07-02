@@ -1,35 +1,55 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Hello gh-jira-branch!"
+# Check if the correct number of arguments is provided
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <URL>"
+    exit 1
+fi
 
-# Snippets to help get started:
+# Given URL as a command-line argument
+url="$1"
 
-# Determine if an executable is in the PATH
-# if ! type -p ruby >/dev/null; then
-#   echo "Ruby not found on the system" >&2
-#   exit 1
-# fi
+# Extract the issue key based on the URL pattern
+if [[ "$url" == *"selectedIssue="* ]]; then
+    issue_key="${url##*selectedIssue=}"
+elif [[ "$url" == *"/browse/"* ]]; then
+    issue_key="${url##*/browse/}"
+else
+    echo "Invalid URL format. Supported formats:"
+    echo "1. https://yourdomain.atlassian.net/jira/software/c/projects/YOUR_DOMAIN/boards/1?selectedIssue=TICKET_ID"
+    echo "2. https://yourdomain.atlassian.net/browse/TICKET_ID"
+    exit 1
+fi
 
-# Pass arguments through to another command
-# gh issue list "$@" -R cli/cli
+# Get the current branch name
+current_branch=$(git symbolic-ref --short HEAD)
 
-# Using the gh api command to retrieve and format information
-# QUERY='
-#   query($endCursor: String) {
-#     viewer {
-#       repositories(first: 100, after: $endCursor) {
-#         nodes {
-#           nameWithOwner
-#           stargazerCount
-#         }
-#       }
-#     }
-#   }
-# '
-# TEMPLATE='
-#   {{- range $repo := .data.viewer.repositories.nodes -}}
-#     {{- printf "name: %s - stargazers: %v\n" $repo.nameWithOwner $repo.stargazerCount -}}
-#   {{- end -}}
-# '
-# exec gh api graphql -f query="${QUERY}" --paginate --template="${TEMPLATE}"
+# Get the default branch name
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD --short)
+default_branch=${default_branch#origin/}
+
+# Check if the current branch is not the default branch
+if [[ "$current_branch" != "$default_branch" ]]; then
+    echo "You are currently on branch '$current_branch'.\n"
+    echo "1. Create a new branch from '$current_branch'"
+    echo "2. Switch to 'trunk' and create a new branch from there\m"
+    read -p "Choose an option (default is 1): " choice
+
+    choice=${choice:-1}
+
+    if [[ "$choice" == "2" ]]; then
+        git checkout trunk
+        current_branch="trunk"
+    fi
+fi
+
+
+# Prompt the user for branch description
+read -p "What's the branch about? " branch_name
+
+# Replace spaces with hyphens in the branch name
+sanitized_branch_name=$(echo "$branch_name" | tr ' ' '-')
+
+# Create the git branch
+git checkout -b "${issue_key}/${sanitized_branch_name}"
